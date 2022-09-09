@@ -1,0 +1,5 @@
+*.exe
+*.user
+/win32/.vs
+/win32/bin
+/win32/obj

@@ -140,18 +140,42 @@ static uint64_t crc64_update(uint64_t crc, const uint8_t *const buffer, const si
 }
 
 /* ======================================================================== */
+/* Detect directory                                                         */
+/* ======================================================================== */
+
+#ifdef _MSC_VER
+#pragma warning(disable: 4100)
+#endif
+
+static int is_directory(FILE *const file)
+{
+#ifndef _WIN32
+    struct stat statbuf;
+    if (!fstat(fileno(file), &statbuf))
+    {
+        if ((statbuf.st_mode & S_IFMT) == S_IFDIR)
+        {
+            return 1;
+        }
+    }
+#endif
+    return 0;
+}
+
+/* ======================================================================== */
 /* Process File                                                             */
 /* ======================================================================== */
 
 const CHAR *const STR_STDIN = T("/dev/stdin");
+
+#define BUFF_SIZE 4096U
 
 static int process(const CHAR *const file_name, const int options)
 {
     int retval = EXIT_FAILURE;
     FILE *input = NULL;
     uint64_t crc = CRC64_INITIALIZER, total_size = 0U;
-    struct stat properties;
-    uint8_t buffer[BUFSIZ];
+    uint8_t buffer[BUFF_SIZE];
 
     input = file_name ? FOPEN(file_name, T("rb")) : stdin;
     if (!input)
@@ -164,21 +188,18 @@ static int process(const CHAR *const file_name, const int options)
         return EXIT_FAILURE;
     }
 
-    if (!fstat(fileno(input), &properties))
+    if (is_directory(input))
     {
-        if ((properties.st_mode & S_IFMT) == S_IFDIR)
+        if (!(options & OPT_SILENT))
         {
-            if (!(options & OPT_SILENT))
-            {
-                FPRINTF(stderr, T("Error: Input file \"%s\" is a directory!\n"), file_name ? file_name : STR_STDIN);
-            }
-            goto clean_up;
+            FPRINTF(stderr, T("Error: Input file \"%s\" is a directory!\n"), file_name ? file_name : STR_STDIN);
         }
+        goto clean_up;
     }
 
     while ((!feof(input)) && (!g_stop_flag))
     {
-        const size_t count = fread(buffer, sizeof(uint8_t), BUFSIZ, input);
+        const size_t count = fread(buffer, sizeof(uint8_t), BUFF_SIZE, input);
         if (count > 0U)
         {
             total_size += count;
