@@ -385,16 +385,16 @@ int MAIN(int argc, CHAR *argv[])
     if (options & OPT_HELPSC)
     {
         FPRINTF(stderr, T("CRC64 %d.%d.%d [%s]\n\n"), VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH, T(__DATE__));
-        FPUTS(T("Synopsis:"), stderr);
-        FPUTS(T("   ") PROGRAM_NAME T(" [OPTIONS] [<file_1> [<file_2> ... <file_n>]]\n"), stderr);
-        FPUTS(T("Options:"), stderr);
-        FPUTS(T("   --help --version  Print help screen / show version information"), stderr);
-        FPUTS(T("   --binary          Output the digest in binary format (default is hex-format)"), stderr);
-        FPUTS(T("   --decimal         Output the digest in decimal string format"), stderr);
-        FPUTS(T("   --upper-case      Print hex-string in upper-case letters (default is lower-case)"), stderr);
-        FPUTS(T("   --no-padding      Print the digest *without* any leading zeros"), stderr);
-        FPUTS(T("   --silent          Suppress error messages"), stderr);
-        FPUTS(T("   --ignore-errors   Ignore I/O errors and proceeed with the next file\n"), stderr);
+        FPUTS(T("Synopsis:\n"), stderr);
+        FPUTS(T("   ") PROGRAM_NAME T(" [OPTIONS] [<file_1> [<file_2> ... <file_n>]]\n\n"), stderr);
+        FPUTS(T("Options:\n"), stderr);
+        FPUTS(T("   --help --version  Print help screen / show version information\n"), stderr);
+        FPUTS(T("   --binary          Output the digest in binary format (default is hex-format)\n"), stderr);
+        FPUTS(T("   --decimal         Output the digest in decimal string format\n"), stderr);
+        FPUTS(T("   --upper-case      Print hex-string in upper-case letters (default is lower-case)\n"), stderr);
+        FPUTS(T("   --no-padding      Print the digest *without* any leading zeros\n"), stderr);
+        FPUTS(T("   --silent          Suppress error messages\n"), stderr);
+        FPUTS(T("   --ignore-errors   Ignore I/O errors and proceeed with the next file\n\n"), stderr);
         return EXIT_SUCCESS;
     }
 
@@ -430,7 +430,10 @@ int MAIN(int argc, CHAR *argv[])
     if (g_stop_flag && (!(options & OPT_SILENT)))
     {
         FPUTS(T("Error: Process was interrupted!\n"), stderr);
-        exit_code = 128 + SIGINT;
+        if (!(options & OPT_IGNERR))
+        {
+            exit_code = 128 + SIGINT;
+        }
     }
 
     return exit_code;
