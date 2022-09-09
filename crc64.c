@@ -18,8 +18,6 @@
 #include <Windows.h>
 #include <io.h>
 #include <fcntl.h>
-#else
-#include <unistd.h>
 #endif
 
 static const int VERSION_MAJOR = 1;
@@ -68,7 +66,8 @@ int _dowildcard = -1;
 #define FPUTS fputs
 #define FPRINTF fprintf
 #define FOPEN fopen
-#define T(X) (X)
+#define __T(X) X
+#define T(X) __T(X)
 
 #endif
 

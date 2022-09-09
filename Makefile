@@ -1,19 +1,28 @@
 MACHINE := $(shell $(CC) -dumpmachine || echo unknown)
 
-ifneq (,$(firstword $(filter x86_64-%,$(shell $(CC) -dumpmachine))))
+ifneq (,$(firstword $(filter x86_64-%,$(MACHINE))))
   MARCH ?= x86-64
   MTUNE ?= nocona
 else
-  MARCH ?= i586
-  MTUNE ?= pentium2
+  ifneq (,$(firstword $(filter i686-%,$(MACHINE))))
+    MARCH ?= i586
+    MTUNE ?= pentium2
+  endif
 endif
 
-CFLAGS = -Wall -std=gnu99 -O3 -march=$(MARCH) -mtune=$(MTUNE) -DNDEBUG
+CFLAGS = -Wall -std=gnu99 -O3 -DNDEBUG
+
+ifneq (,$(MARCH))
+  CFLAGS += -march=$(MARCH)
+endif
+ifneq (,$(MTUNE))
+  CFLAGS += -mtune=$(MTUNE)
+endif
 
 ifneq (,$(firstword $(filter %mingw32 %-windows-gnu %-cygwin %-cygnus,$(MACHINE))))
-  SUFFIX := .exe
+  OUTNAME := crc64.exe
 else
-  SUFFIX :=
+  OUTNAME := crc64
 endif
 
 ifneq (,$(firstword $(filter %-w64-mingw32 %w64-windows-gnu,$(MACHINE))))
@@ -25,4 +34,4 @@ CFLAGS += -s -static
 .PHONY: all
 
 all:
-	$(CC) $(CFLAGS) -o crc64$(SUFFIX) crc64.c
+	$(CC) $(CFLAGS) -o $(OUTNAME) crc64.c
