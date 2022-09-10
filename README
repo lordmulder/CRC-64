@@ -1,0 +1,14 @@
+CRC64
+-----
+
+Synopsis:
+   crc64.exe [OPTIONS] [<file_1> [<file_2> ... <file_n>]]
+
+Options:
+   --help --version  Print help screen / show version information
+   --binary          Output the digest in binary format (default is hex-format)
+   --decimal         Output the digest in decimal string format
+   --upper-case      Print hex-string in upper-case letters (default is lower-case)
+   --no-padding      Print the digest *without* any leading zeros
+   --silent          Suppress error messages
+   --ignore-errors   Ignore I/O errors and proceeed with the next file
