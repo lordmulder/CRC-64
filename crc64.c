@@ -22,7 +22,7 @@
 
 static const int VERSION_MAJOR = 1;
 static const int VERSION_MINOR = 0;
-static const int VERSION_PATCH = 0;
+static const int VERSION_PATCH = 1;
 
 #define OPT_HELPSC 0x01
 #define OPT_BINARY 0x02
@@ -31,6 +31,7 @@ static const int VERSION_PATCH = 0;
 #define OPT_NOPADD 0x10
 #define OPT_IGNERR 0x20
 #define OPT_SILENT 0x40
+#define OPT_NOFLSH 0x80
 
 /* ======================================================================== */
 /* Platform                                                                 */
@@ -298,6 +299,11 @@ static int process(const CHAR *const file_name, const int options)
         fwrite(&crc, sizeof(uint64_t), 1U, stdout);
     }
 
+    if (!(options & OPT_NOFLSH))
+    {
+        fflush(stdout);
+    }
+
     retval = EXIT_SUCCESS;
 
 clean_up:
@@ -364,6 +370,10 @@ int MAIN(int argc, CHAR *argv[])
             {
                 options |= OPT_SILENT;
             }
+            else if (!STRCASECMP(arg_val, T("no-flush")))
+            {
+                options |= OPT_NOFLSH;
+            }
             else
             {
                 FPRINTF(stderr, T("Option \"--%s\" is not recognized!\n"), arg_val);
@@ -394,7 +404,8 @@ int MAIN(int argc, CHAR *argv[])
         FPUTS(T("   --upper-case      Print hex-string in upper-case letters (default is lower-case)\n"), stderr);
         FPUTS(T("   --no-padding      Print the digest *without* any leading zeros\n"), stderr);
         FPUTS(T("   --silent          Suppress error messages\n"), stderr);
-        FPUTS(T("   --ignore-errors   Ignore I/O errors and proceeed with the next file\n\n"), stderr);
+        FPUTS(T("   --ignore-errors   Ignore I/O errors and proceeed with the next file\n"), stderr);
+        FPUTS(T("   --no-flush        Do *not* flush the standard output stream after each file\n\n"), stderr);
         return EXIT_SUCCESS;
     }
 
