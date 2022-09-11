@@ -199,9 +199,13 @@ static int is_directory(FILE *const file)
 /* Process File                                                             */
 /* ======================================================================== */
 
-const CHAR *const STR_STDIN = T("/dev/stdin");
-
 #define BUFF_SIZE 4096U
+
+#ifdef _WIN32
+const wchar_t *const STR_STDIN = L"CONIN$";
+#else
+const char *const STR_STDIN = "/dev/stdin";
+#endif
 
 static int process(const CHAR *const file_name, const int options)
 {
