@@ -1,5 +1,8 @@
 MACHINE := $(shell $(CC) -dumpmachine || echo unknown)
 
+STATIC ?= 1
+STRIP  ?= 1
+
 ifneq (,$(firstword $(filter x86_64-%,$(MACHINE))))
   MARCH ?= x86-64
   MTUNE ?= nocona
@@ -11,6 +14,10 @@ else
 endif
 
 CFLAGS = -Wall -std=gnu99 -O3 -DNDEBUG
+
+ifneq (,$(XCFLAGS))
+  CFLAGS += $(XCFLAGS)
+endif
 
 ifneq (,$(MARCH))
   CFLAGS += -march=$(MARCH)
@@ -29,9 +36,14 @@ ifneq (,$(firstword $(filter %-w64-mingw32 %w64-windows-gnu,$(MACHINE))))
   CFLAGS += -D__USE_MINGW_ANSI_STDIO=0 -mconsole -municode
 endif
 
-CFLAGS += -s -static
+ifeq ($(STATIC),1)
+  CFLAGS += -static
+endif
 
 .PHONY: all
 
 all:
 	$(CC) $(CFLAGS) -o $(OUTNAME) crc64.c
+ifeq ($(STRIP),1)
+	strip $(OUTNAME)
+endif
