@@ -100,13 +100,13 @@ int _dowildcard = -1;
 /* Signal handler                                                           */
 /* ======================================================================== */
 
-static volatile int g_stop_flag = 0;
+static int g_interrupted_flag = 0;
 
 static void sigint_handler(const int sig)
 {
     if (sig == SIGINT)
     {
-        g_stop_flag = 1;
+        g_interrupted_flag = -1;
     }
 }
 
@@ -256,7 +256,7 @@ static int process(const CHAR *const file_name, const int options)
         goto clean_up;
     }
 
-    while ((!feof(input)) && (!g_stop_flag))
+    while (!feof(input))
     {
         const size_t count = fread(buffer, sizeof(uint8_t), BUFF_SIZE, input);
         if (count > 0U)
@@ -278,6 +278,10 @@ static int process(const CHAR *const file_name, const int options)
             {
                 break; /*ignore the read error*/
             }
+        }
+        if (g_interrupted_flag)
+        {
+            goto clean_up; /*process was interrupted*/
         }
     }
 
@@ -415,7 +419,7 @@ int MAIN(int argc, CHAR *argv[])
             }
             else
             {
-                FPRINTF(stderr, T("Option \"--%s\" is not recognized!\n"), arg_val);
+                FPRINTF(stderr, T("Error: Option \"--%s\" is not recognized!\n"), arg_val);
                 return EXIT_FAILURE;
             }
         }
@@ -456,7 +460,7 @@ int MAIN(int argc, CHAR *argv[])
 
     if (arg_off < argc)
     {
-        while ((arg_off < argc) && (!g_stop_flag))
+        while ((arg_off < argc) && (!g_interrupted_flag))
         {
             if (process(argv[arg_off++], options) != EXIT_SUCCESS)
             {
@@ -479,13 +483,13 @@ int MAIN(int argc, CHAR *argv[])
         }
     }
 
-    if (g_stop_flag && (!(options & OPT_SILENT)))
+    if (g_interrupted_flag && (!(options & OPT_IGNERR)))
     {
-        FPUTS(T("Error: Process was interrupted!\n"), stderr);
-        if (!(options & OPT_IGNERR))
+        if (!(options & OPT_SILENT))
         {
-            exit_code = 128 + SIGINT;
+            FPUTS(T("Error: Process was interrupted!\n"), stderr);
         }
+        exit_code = 128 + SIGINT;
     }
 
     return exit_code;
