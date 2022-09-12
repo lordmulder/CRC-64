@@ -22,16 +22,40 @@
 
 static const int VERSION_MAJOR = 1;
 static const int VERSION_MINOR = 0;
-static const int VERSION_PATCH = 1;
+static const int VERSION_PATCH = 2;
 
-#define OPT_HELPSC 0x01
-#define OPT_BINARY 0x02
-#define OPT_UPPERC 0x04
-#define OPT_DECIML 0x08
-#define OPT_NOPADD 0x10
-#define OPT_IGNERR 0x20
-#define OPT_SILENT 0x40
-#define OPT_NOFLSH 0x80
+#define OPT_HELPSC 0x001
+#define OPT_BINARY 0x002
+#define OPT_UPPERC 0x004
+#define OPT_DECIML 0x008
+#define OPT_NOPADD 0x010
+#define OPT_IGNERR 0x020
+#define OPT_SILENT 0x040
+#define OPT_NOFLSH 0x080
+#define OPT_NEGATE 0x100
+#define OPT_ZEROIN 0x200
+
+/* ======================================================================== */
+/* Compiler                                                                 */
+/* ======================================================================== */
+
+#if defined(__GNUC__) || defined(__INTEL_LLVM_COMPILER)
+
+#define ALIGNED(X) __attribute__((aligned(X)))
+#define PURE __attribute__((pure))
+#define FORCE_INLINE __attribute__((always_inline)) __inline__
+
+#elif defined(_MSC_VER)
+
+#define ALIGNED(X) __declspec(align(X))
+#define PURE
+#define FORCE_INLINE __forceinline
+
+#else
+
+#error Unsupported compiler, please fix !!!
+
+#endif
 
 /* ======================================================================== */
 /* Platform                                                                 */
@@ -92,7 +116,7 @@ static void sigint_handler(const int sig)
 
 static const uint64_t CRC64_INITIALIZER = UINT64_C(~0);
 
-static const uint64_t CRC64_TABLE[256] =
+static const uint64_t ALIGNED(64) CRC64_TABLE[256] =
 {
     0x0000000000000000ULL, 0x42f0e1eba9ea3693ULL, 0x85e1c3d753d46d26ULL, 0xc711223cfa3e5bb5ULL,
     0x493366450e42ecdfULL, 0x0bc387aea7a8da4cULL, 0xccd2a5925d9681f9ULL, 0x8e224479f47cb76aULL,
@@ -160,14 +184,12 @@ static const uint64_t CRC64_TABLE[256] =
     0x5dedc41a34bbeeb2ULL, 0x1f1d25f19d51d821ULL, 0xd80c07cd676f8394ULL, 0x9afce626ce85b507ULL
 };
 
-static uint64_t crc64_update(uint64_t crc, const uint8_t *const buffer, const size_t count)
+static uint64_t PURE FORCE_INLINE crc64_update(uint64_t crc, const uint8_t *ptr, const size_t count)
 {
-    const uint8_t *p = buffer;
-    size_t i, t;
-    for (i = 0U; i < count; ++i)
+    const uint8_t *const endptr = ptr + count;
+    while (ptr < endptr)
     {
-        t = ((crc >> 56) ^ (*p++)) & 0xFF;
-        crc = CRC64_TABLE[t] ^ (crc << 8);
+        crc = CRC64_TABLE[((crc >> 56) ^ (*ptr++)) & 0xFF] ^ (crc << 8);
     }
     return crc;
 }
@@ -211,7 +233,7 @@ static int process(const CHAR *const file_name, const int options)
 {
     int retval = EXIT_FAILURE;
     FILE *input = NULL;
-    uint64_t crc = CRC64_INITIALIZER, total_size = 0U;
+    uint64_t crc = (!(options & OPT_ZEROIN)) ? CRC64_INITIALIZER : UINT64_C(0), total_size = 0U;
     uint8_t buffer[BUFF_SIZE];
 
     input = file_name ? FOPEN(file_name, T("rb")) : stdin;
@@ -257,6 +279,11 @@ static int process(const CHAR *const file_name, const int options)
                 break; /*ignore the read error*/
             }
         }
+    }
+
+    if (options & OPT_NEGATE)
+    {
+        crc = ~crc;
     }
 
     if (!(options & OPT_BINARY))
@@ -378,6 +405,14 @@ int MAIN(int argc, CHAR *argv[])
             {
                 options |= OPT_NOFLSH;
             }
+            else if (!STRCASECMP(arg_val, T("init-with-zero")))
+            {
+                options |= OPT_ZEROIN;
+            }
+            else if (!STRCASECMP(arg_val, T("negate-final")))
+            {
+                options |= OPT_NEGATE;
+            }
             else
             {
                 FPRINTF(stderr, T("Option \"--%s\" is not recognized!\n"), arg_val);
@@ -405,11 +440,13 @@ int MAIN(int argc, CHAR *argv[])
         FPUTS(T("   --help --version  Print help screen / show version information\n"), stderr);
         FPUTS(T("   --binary          Output the digest in binary format (default is hex-format)\n"), stderr);
         FPUTS(T("   --decimal         Output the digest in decimal string format\n"), stderr);
-        FPUTS(T("   --upper-case      Print hex-string in upper-case letters (default is lower-case)\n"), stderr);
+        FPUTS(T("   --upper-case      Print hex-string as upper-case (default is lower-case)\n"), stderr);
         FPUTS(T("   --no-padding      Print the digest *without* any leading zeros\n"), stderr);
         FPUTS(T("   --silent          Suppress error messages\n"), stderr);
         FPUTS(T("   --ignore-errors   Ignore I/O errors and proceeed with the next file\n"), stderr);
-        FPUTS(T("   --no-flush        Do *not* flush the standard output stream after each file\n\n"), stderr);
+        FPUTS(T("   --no-flush        Do *not* flush the standard output stream after each file\n"), stderr);
+        FPUTS(T("   --init-with-zero  Initialize CRC with zero (default is 0xFFF...FFF)\n"), stderr);
+        FPUTS(T("   --negate-final    Negate the final CRC result\n\n"), stderr);
         return EXIT_SUCCESS;
     }
 

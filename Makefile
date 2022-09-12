@@ -5,7 +5,7 @@ STRIP  ?= 1
 
 ifneq (,$(firstword $(filter x86_64-%,$(MACHINE))))
   MARCH ?= x86-64
-  MTUNE ?= nocona
+  MTUNE ?= znver3
 else
   ifneq (,$(firstword $(filter i686-%,$(MACHINE))))
     MARCH ?= i586
@@ -13,7 +13,7 @@ else
   endif
 endif
 
-CFLAGS = -Wall -std=gnu99 -O3 -DNDEBUG
+CFLAGS = -Wall -std=gnu99 -Ofast -DNDEBUG
 
 ifneq (,$(XCFLAGS))
   CFLAGS += $(XCFLAGS)
