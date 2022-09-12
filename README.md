@@ -1,7 +1,9 @@
 CRC-64
 ======
 
-Simple cross-platform command-line tool for computing CRC-64 checksums.
+Simple cross-platform command-line tool for computing **CRC-64** ([ECMA-182](https://www.ecma-international.org/wp-content/uploads/ECMA-182_1st_edition_december_1992.pdf)) checksums.
+
+Generator polynomial: **`0x42F0E1EBA9EA3693`**
 
 ```
 Synopsis:
