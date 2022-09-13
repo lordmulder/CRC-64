@@ -20,6 +20,7 @@ Options:
    --no-flush        Do *not* flush the standard output stream after each file
    --init-with-zero  Initialize CRC with zero (default is 0xFFF...FFF)
    --negate-final    Negate the final CRC result
+   --self-test       Run integreated self-test and exit program
 ```
 
 One output line is generated per input file:

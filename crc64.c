@@ -32,8 +32,9 @@ static const int VERSION_PATCH = 2;
 #define OPT_IGNERR 0x020
 #define OPT_SILENT 0x040
 #define OPT_NOFLSH 0x080
-#define OPT_NEGATE 0x100
-#define OPT_ZEROIN 0x200
+#define OPT_ZEROIN 0x100
+#define OPT_NEGATE 0x200
+#define OPT_SLFTST 0x400
 
 /* ======================================================================== */
 /* Compiler                                                                 */
@@ -352,6 +353,56 @@ clean_up:
 }
 
 /* ======================================================================== */
+/* Self-test                                                                */
+/* ======================================================================== */
+
+static const struct
+{
+    uint64_t expected;
+    size_t iterations;
+    const char *input;
+}
+TEST_VECTOR[] =
+{
+    { 0xffffffffffffffffULL, 0x0000001, "" },
+    { 0xfb747ec5060b68fdULL, 0x0000001, "abc" },
+    { 0xe48092e3bf0112faULL, 0x0000001, "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq" },
+    { 0x763e5273763ec641ULL, 0x0000001, "abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu" },
+    { 0x80459bd12d319927ULL, 0x00F4240, "a" },
+    { 0x5343b9581532ecbdULL, 0x1000000, "abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmno" },
+    { 0x0000000000000000ULL, 0x0000000, NULL }
+};
+
+static int self_test(void)
+{
+    uint64_t crc;
+    size_t len, i, j;
+
+    for (i = 0U; TEST_VECTOR[i].input; ++i)
+    {
+        len = strlen(TEST_VECTOR[i].input);
+        crc = CRC64_INITIALIZER;
+        for (j = 0U; j < TEST_VECTOR[i].iterations; ++j)
+        {
+            crc = crc64_update(crc, (const uint8_t*)TEST_VECTOR[i].input, len);
+        }
+        if (crc == TEST_VECTOR[i].expected)
+        {
+            FPRINTF(stderr, T("%016") T(PRIx64) T(" [OK]\n"), crc);
+            fflush(stderr);
+        }
+        else
+        {
+            FPRINTF(stderr, T("%016") T(PRIx64) T(" [Failed!]\n"), crc);
+            return EXIT_FAILURE;
+        }
+    }
+
+    FPUTS(T("All tests completed successfully.\n"), stderr);
+    return EXIT_SUCCESS;
+}
+
+/* ======================================================================== */
 /* MAIN                                                                     */
 /* ======================================================================== */
 
@@ -417,6 +468,10 @@ int MAIN(int argc, CHAR *argv[])
             {
                 options |= OPT_NEGATE;
             }
+            else if (!STRCASECMP(arg_val, T("self-test")))
+            {
+                options |= OPT_SLFTST;
+            }
             else
             {
                 FPRINTF(stderr, T("Error: Option \"--%s\" is not recognized!\n"), arg_val);
@@ -450,8 +505,16 @@ int MAIN(int argc, CHAR *argv[])
         FPUTS(T("   --ignore-errors   Ignore I/O errors and proceeed with the next file\n"), stderr);
         FPUTS(T("   --no-flush        Do *not* flush the standard output stream after each file\n"), stderr);
         FPUTS(T("   --init-with-zero  Initialize CRC with zero (default is 0xFFF...FFF)\n"), stderr);
-        FPUTS(T("   --negate-final    Negate the final CRC result\n\n"), stderr);
+        FPUTS(T("   --negate-final    Negate the final CRC result\n"), stderr);
+        FPUTS(T("   --self-test       Run integreated self-test and exit program\n\n"), stderr);
         return EXIT_SUCCESS;
+    }
+
+    if (options & OPT_SLFTST)
+    {
+        FPUTS(T("Running CRC-64 self-test, please wait...\n"), stderr);
+        fflush(stderr);
+        return self_test();
     }
 
 #ifdef _WIN32
