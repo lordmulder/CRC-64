@@ -358,47 +358,47 @@ clean_up:
 
 static const struct
 {
-    uint64_t expected;
-    size_t iterations;
+    uint64_t expected[2U];
+    size_t loops;
     const char *input;
 }
-TEST_VECTOR[] =
+CRC64_TESTCASE[] =
 {
-    { 0xffffffffffffffffULL, 0x0000001, "" },
-    { 0xfb747ec5060b68fdULL, 0x0000001, "abc" },
-    { 0xe48092e3bf0112faULL, 0x0000001, "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq" },
-    { 0x763e5273763ec641ULL, 0x0000001, "abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu" },
-    { 0x80459bd12d319927ULL, 0x00F4240, "a" },
-    { 0x5343b9581532ecbdULL, 0x1000000, "abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmno" },
-    { 0x0000000000000000ULL, 0x0000000, NULL }
+    { { 0xffffffffffffffffULL, 0x0000000000000000ULL }, 0x0000001, "" },
+    { { 0xfb747ec5060b68fdULL, 0x66501a349a0e0855ULL }, 0x0000001, "abc" },
+    { { 0xe48092e3bf0112faULL, 0x29d18301fe33ca5dULL }, 0x0000001, "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq" },
+    { { 0x763e5273763ec641ULL, 0x86751df1edd9a621ULL }, 0x0000001, "abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu" },
+    { { 0x80459bd12d319927ULL, 0x3377cec7a585e11fULL }, 0x00F4240, "a" },
+    { { 0x5343b9581532ecbdULL, 0x9c5f7a86307e23ceULL }, 0x1000000, "abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmno" },
+    { { 0x771555a0a9bdf4cbULL, 0xfbd4c4d2a72a6865ULL }, 0xFFFFFC7, "\x20!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~" },
+    { { 0x3514226b46672b42ULL, 0xb9d5b31948f0b7ecULL }, 0xFFFFFC7, ")F9ow<I]PrX5kgbjJ'(`A&\".qHt6|{}-\x20paCe%Q:*,#x0NiMuzUG>V;!_S+dym/\\cL$73@4T?8DO2B[EhnKY^slZ~=RWvf1" },
+    { { 0x0000000000000000ULL, 0x0000000000000000ULL }, 0x0000000, NULL }
 };
 
 static int self_test(void)
 {
-    uint64_t crc;
-    size_t len, i, j;
-
-    for (i = 0U; TEST_VECTOR[i].input; ++i)
+    size_t i, j, k;
+    for (i = 0U; CRC64_TESTCASE[i].input; ++i)
     {
-        len = strlen(TEST_VECTOR[i].input);
-        crc = CRC64_INITIALIZER;
-        for (j = 0U; j < TEST_VECTOR[i].iterations; ++j)
+        const size_t len = strlen(CRC64_TESTCASE[i].input);
+        for (j = 0U; j < 2U; ++j)
         {
-            crc = crc64_update(crc, (const uint8_t*)TEST_VECTOR[i].input, len);
-        }
-        if (crc == TEST_VECTOR[i].expected)
-        {
-            FPRINTF(stderr, T("%016") T(PRIx64) T(" [OK]\n"), crc);
+            uint64_t crc = (j < 1U) ? CRC64_INITIALIZER : UINT64_C(0);
+            for (k = 0U; k < CRC64_TESTCASE[i].loops; ++k)
+            {
+                crc = crc64_update(crc, (const uint8_t*)CRC64_TESTCASE[i].input, len);
+            }
+            FPRINTF(stderr, T("%016") T(PRIx64) T(" [%s]\n"), crc, (crc == CRC64_TESTCASE[i].expected[j]) ? T("OK") : T("Failed!"));
             fflush(stderr);
-        }
-        else
-        {
-            FPRINTF(stderr, T("%016") T(PRIx64) T(" [Failed!]\n"), crc);
-            return EXIT_FAILURE;
+            if (crc != CRC64_TESTCASE[i].expected[j])
+            {
+                FPRINTF(stderr, T("Expected result was 0x%016") T(PRIx64) T(", but got 0x%016") T(PRIx64) T(" :-(\n"), CRC64_TESTCASE[i].expected[j], crc);
+                return EXIT_FAILURE;
+            }
         }
     }
 
-    FPUTS(T("All tests completed successfully.\n"), stderr);
+    FPUTS(T("All tests completed successfully :-)\n"), stderr);
     return EXIT_SUCCESS;
 }
 
