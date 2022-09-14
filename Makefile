@@ -13,7 +13,7 @@ else
   endif
 endif
 
-CFLAGS = -Wall -std=gnu99 -Ofast -DNDEBUG
+CFLAGS = -Wall -std=gnu99 -pedantic -Ofast -DNDEBUG
 
 ifneq (,$(XCFLAGS))
   CFLAGS += $(XCFLAGS)

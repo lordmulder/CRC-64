@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <ctype.h>
 #include <signal.h>
 
 #ifdef _WIN32
@@ -25,16 +26,17 @@ static const int VERSION_MINOR = 0;
 static const int VERSION_PATCH = 2;
 
 #define OPT_HELPSC 0x001
-#define OPT_BINARY 0x002
-#define OPT_UPPERC 0x004
-#define OPT_DECIML 0x008
-#define OPT_NOPADD 0x010
-#define OPT_IGNERR 0x020
-#define OPT_SILENT 0x040
-#define OPT_NOFLSH 0x080
-#define OPT_ZEROIN 0x100
-#define OPT_NEGATE 0x200
-#define OPT_SLFTST 0x400
+#define OPT_VERSNO 0x002
+#define OPT_BINARY 0x004
+#define OPT_UPPERC 0x008
+#define OPT_DECIML 0x010
+#define OPT_NOPADD 0x020
+#define OPT_IGNERR 0x040
+#define OPT_SILENT 0x080
+#define OPT_NOFLSH 0x100
+#define OPT_ZEROIN 0x200
+#define OPT_NEGATE 0x400
+#define OPT_SLFTST 0x800
 
 /* ======================================================================== */
 /* Compiler                                                                 */
@@ -45,13 +47,16 @@ static const int VERSION_PATCH = 2;
 #define ALIGNED(X) __attribute__((aligned(X)))
 #define PURE __attribute__((pure))
 #define FORCE_INLINE __attribute__((always_inline)) __inline__
+#define COUNTOF(X) (sizeof(X) / sizeof((X)[0]))
+#define ATOMIC_INC(X) __sync_add_and_fetch((X), 1L);
 
 #elif defined(_MSC_VER)
 
 #define ALIGNED(X) __declspec(align(X))
-#define PURE
+#define PURE __declspec(noalias)
 #define FORCE_INLINE __forceinline
-
+#define COUNTOF(X) _countof(X)
+#define ATOMIC_INC(X) _InterlockedIncrement((X));
 #else
 
 #error Unsupported compiler, please fix !!!
@@ -68,6 +73,8 @@ static const int VERSION_PATCH = 2;
 #define CHAR wchar_t
 #define MAIN wmain
 #define STRCASECMP _wcsicmp
+#define ISSPACE iswspace
+#define TOLOWER towlower
 #define PRINTF wprintf
 #define FPUTS fputws
 #define FPRINTF fwprintf
@@ -88,6 +95,8 @@ int _dowildcard = -1;
 #define CHAR char
 #define MAIN main
 #define STRCASECMP strcasecmp
+#define ISSPACE isspace
+#define TOLOWER tolower
 #define PRINTF printf
 #define FPUTS fputs
 #define FPRINTF fprintf
@@ -101,13 +110,13 @@ int _dowildcard = -1;
 /* Signal handler                                                           */
 /* ======================================================================== */
 
-static int g_interrupted_flag = 0;
+static long g_aborted = 0L;
 
 static void sigint_handler(const int sig)
 {
     if (sig == SIGINT)
     {
-        g_interrupted_flag = -1;
+        ATOMIC_INC(&g_aborted);
     }
 }
 
@@ -230,7 +239,7 @@ const wchar_t *const STR_STDIN = L"CONIN$";
 const char *const STR_STDIN = "/dev/stdin";
 #endif
 
-static int process(const CHAR *const file_name, const int options)
+static int process_file(const CHAR *const file_name, const int options)
 {
     int retval = EXIT_FAILURE;
     FILE *input = NULL;
@@ -280,7 +289,7 @@ static int process(const CHAR *const file_name, const int options)
                 break; /*ignore the read error*/
             }
         }
-        if (g_interrupted_flag)
+        if (g_aborted)
         {
             goto clean_up; /*process was interrupted*/
         }
@@ -371,14 +380,13 @@ CRC64_TESTCASE[] =
     { { 0x80459bd12d319927ULL, 0x3377cec7a585e11fULL }, 0x00F4240, "a" },
     { { 0x5343b9581532ecbdULL, 0x9c5f7a86307e23ceULL }, 0x1000000, "abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmno" },
     { { 0x771555a0a9bdf4cbULL, 0xfbd4c4d2a72a6865ULL }, 0xFFFFFC7, "\x20!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~" },
-    { { 0x3514226b46672b42ULL, 0xb9d5b31948f0b7ecULL }, 0xFFFFFC7, ")F9ow<I]PrX5kgbjJ'(`A&\".qHt6|{}-\x20paCe%Q:*,#x0NiMuzUG>V;!_S+dym/\\cL$73@4T?8DO2B[EhnKY^slZ~=RWvf1" },
-    { { 0x0000000000000000ULL, 0x0000000000000000ULL }, 0x0000000, NULL }
+    { { 0x3514226b46672b42ULL, 0xb9d5b31948f0b7ecULL }, 0xFFFFFC7, ")F9ow<I]PrX5kgbjJ'(`A&\".qHt6|{}-\x20paCe%Q:*,#x0NiMuzUG>V;!_S+dym/\\cL$73@4T?8DO2B[EhnKY^slZ~=RWvf1" }
 };
 
 static int self_test(void)
 {
     size_t i, j, k;
-    for (i = 0U; CRC64_TESTCASE[i].input; ++i)
+    for (i = 0U; i < COUNTOF(CRC64_TESTCASE); ++i)
     {
         const size_t len = strlen(CRC64_TESTCASE[i].input);
         for (j = 0U; j < 2U; ++j)
@@ -387,19 +395,64 @@ static int self_test(void)
             for (k = 0U; k < CRC64_TESTCASE[i].loops; ++k)
             {
                 crc = crc64_update(crc, (const uint8_t*)CRC64_TESTCASE[i].input, len);
+                if (g_aborted)
+                {
+                    return EXIT_FAILURE;
+                }
             }
             FPRINTF(stderr, T("%016") T(PRIx64) T(" [%s]\n"), crc, (crc == CRC64_TESTCASE[i].expected[j]) ? T("OK") : T("Failed!"));
             fflush(stderr);
             if (crc != CRC64_TESTCASE[i].expected[j])
             {
-                FPRINTF(stderr, T("Expected result was 0x%016") T(PRIx64) T(", but got 0x%016") T(PRIx64) T(" :-(\n"), CRC64_TESTCASE[i].expected[j], crc);
+                FPRINTF(stderr, T("Expected result was 0x%016") T(PRIx64) T(", but got 0x%016") T(PRIx64) T("\n"), CRC64_TESTCASE[i].expected[j], crc);
                 return EXIT_FAILURE;
             }
         }
     }
 
-    FPUTS(T("All tests completed successfully :-)\n"), stderr);
     return EXIT_SUCCESS;
+}
+
+/* ======================================================================== */
+/* Parse options                                                            */
+/* ======================================================================== */
+
+#define ISALNUM(X) (((X) != T('\0')) && ((((X) >= T('0')) && ((X) <= T('9'))) || (((X) >= T('a')) && ((X) <= T('z'))) || (((X) >= T('A')) && ((X) <= T('Z')))))
+
+static const struct
+{
+    CHAR c;
+    const CHAR *name;
+    int flag;
+}
+CLI_OPTION_NAMES[] =
+{
+    { T('h'), T("help"),           OPT_HELPSC },
+    { T('v'), T("version"),        OPT_VERSNO },
+    { T('b'), T("binary"),         OPT_BINARY },
+    { T('u'), T("upper-case"),     OPT_UPPERC },
+    { T('d'), T("decimal"),        OPT_DECIML },
+    { T('p'), T("no-padding"),     OPT_NOPADD },
+    { T('e'), T("ignore-errors"),  OPT_IGNERR },
+    { T('s'), T("silent"),         OPT_SILENT },
+    { T('f'), T("no-flush"),       OPT_NOFLSH },
+    { T('z'), T("init-with-zero"), OPT_ZEROIN },
+    { T('n'), T("negate-final"),   OPT_NEGATE },
+    { T('t'), T("self-test"),      OPT_SLFTST }
+};
+
+static int parse_option(int *const options, const CHAR c, const CHAR *const name)
+{
+    size_t i;
+    for (i = 0U; i < COUNTOF(CLI_OPTION_NAMES); ++i)
+    {
+        if ((c == CLI_OPTION_NAMES[i].c) || (name && (!STRCASECMP(name, CLI_OPTION_NAMES[i].name))))
+        {
+            *options |= CLI_OPTION_NAMES[i].flag;
+            return EXIT_SUCCESS;
+        }
+    }
+    return EXIT_FAILURE;
 }
 
 /* ======================================================================== */
@@ -423,65 +476,66 @@ int MAIN(int argc, CHAR *argv[])
     sigaction(SIGINT, &act, NULL);
 #endif
 
-    while ((arg_off < argc) && (argv[arg_off][0] == '-') && (argv[arg_off][1] == '-'))
+    if ((argc > 1) && (!STRCASECMP(argv[1], T("/?"))))
     {
-        const CHAR *const arg_val = argv[arg_off++] + 2U;
-        if (arg_val[0] != '\0')
+        options |= OPT_HELPSC;
+        goto print_help;
+    }
+
+    while ((arg_off < argc) && (argv[arg_off][0] == T('-')) && ((argv[arg_off][1] == T('-')) || ISALNUM(argv[arg_off][1])))
+    {
+        const CHAR *arg_ptr = argv[arg_off++] + 1U;
+        if (*arg_ptr == T('-'))
         {
-            if ((!STRCASECMP(arg_val, T("help"))) || (!STRCASECMP(arg_val, T("version"))))
+            if (*(++arg_ptr) != T('\0'))
             {
-                options |= OPT_HELPSC;
-            }
-            else if (!STRCASECMP(arg_val, T("binary")))
-            {
-                options |= OPT_BINARY;
-            }
-            else if (!STRCASECMP(arg_val, T("upper-case")))
-            {
-                options |= OPT_UPPERC;
-            }
-            else if (!STRCASECMP(arg_val, T("decimal")))
-            {
-                options |= OPT_DECIML;
-            }
-            else if (!STRCASECMP(arg_val, T("no-padding")))
-            {
-                options |= OPT_NOPADD;
-            }
-            else if (!STRCASECMP(arg_val, T("ignore-errors")))
-            {
-                options |= OPT_IGNERR;
-            }
-            else if (!STRCASECMP(arg_val, T("silent")))
-            {
-                options |= OPT_SILENT;
-            }
-            else if (!STRCASECMP(arg_val, T("no-flush")))
-            {
-                options |= OPT_NOFLSH;
-            }
-            else if (!STRCASECMP(arg_val, T("init-with-zero")))
-            {
-                options |= OPT_ZEROIN;
-            }
-            else if (!STRCASECMP(arg_val, T("negate-final")))
-            {
-                options |= OPT_NEGATE;
-            }
-            else if (!STRCASECMP(arg_val, T("self-test")))
-            {
-                options |= OPT_SLFTST;
+                if (parse_option(&options, T('\0'), arg_ptr) != EXIT_SUCCESS)
+                {
+                    FPRINTF(stderr, T("Error: Option \"--%s\" is not recognized!\n"), arg_ptr);
+                    return EXIT_FAILURE;
+                }
             }
             else
             {
-                FPRINTF(stderr, T("Error: Option \"--%s\" is not recognized!\n"), arg_val);
-                return EXIT_FAILURE;
+                break; /*stop option processing here*/
             }
         }
         else
         {
-            break; /*stop option processing*/
+            for(; ISALNUM(*arg_ptr); ++arg_ptr)
+            {
+                if (parse_option(&options, TOLOWER(*arg_ptr), NULL) != EXIT_SUCCESS)
+                {
+                    FPRINTF(stderr, T("Error: Option \"-%c\" is not recognized!\n"), *arg_ptr);
+                    return EXIT_FAILURE;
+                }
+            }
         }
+    }
+
+print_help:
+
+    if ((options & OPT_HELPSC) || (options & OPT_VERSNO))
+    {
+        FPRINTF(stderr, T("CRC-64 %d.%d.%d [%s]\n"), VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH, T(__DATE__));
+        if (options & OPT_HELPSC)
+        {
+            FPUTS(T("\nSynopsis:\n"), stderr);
+            FPUTS(T("   ") PROGRAM_NAME T(" [OPTIONS] [<file_1> [<file_2> ... <file_n>]]\n\n"), stderr);
+            FPUTS(T("Options:\n"), stderr);
+            FPUTS(T("   -h --help --version  Show help screen / show version information\n"), stderr);
+            FPUTS(T("   -b --binary          Output digest in binary format (default is hex-string)\n"), stderr);
+            FPUTS(T("   -d --decimal         Output digest in decimal string format\n"), stderr);
+            FPUTS(T("   -u --upper-case      Print digest as upper-case (default is lower-case)\n"), stderr);
+            FPUTS(T("   -p --no-padding      Print digest *without* any leading zeros\n"), stderr);
+            FPUTS(T("   -s --silent          Suppress error messages\n"), stderr);
+            FPUTS(T("   -e --ignore-errors   Ignore I/O errors and proceeed with the next file\n"), stderr);
+            FPUTS(T("   -f --no-flush        Do *not* flush output stream after each file\n"), stderr);
+            FPUTS(T("   -z --init-with-zero  Initialize CRC with 0x000..000 (default is 0xFFF..FFF)\n"), stderr);
+            FPUTS(T("   -n --negate-final    Negate the final CRC result\n"), stderr);
+            FPUTS(T("   -t --self-test       Run integrated self-test and exit program\n\n"), stderr);
+        }
+        return EXIT_SUCCESS;
     }
 
     if ((options & OPT_BINARY) && (options & OPT_DECIML))
@@ -490,31 +544,23 @@ int MAIN(int argc, CHAR *argv[])
         return EXIT_FAILURE;
     }
 
-    if (options & OPT_HELPSC)
-    {
-        FPRINTF(stderr, T("CRC64 %d.%d.%d [%s]\n\n"), VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH, T(__DATE__));
-        FPUTS(T("Synopsis:\n"), stderr);
-        FPUTS(T("   ") PROGRAM_NAME T(" [OPTIONS] [<file_1> [<file_2> ... <file_n>]]\n\n"), stderr);
-        FPUTS(T("Options:\n"), stderr);
-        FPUTS(T("   --help --version  Print help screen / show version information\n"), stderr);
-        FPUTS(T("   --binary          Output the digest in binary format (default is hex-format)\n"), stderr);
-        FPUTS(T("   --decimal         Output the digest in decimal string format\n"), stderr);
-        FPUTS(T("   --upper-case      Print hex-string as upper-case (default is lower-case)\n"), stderr);
-        FPUTS(T("   --no-padding      Print the digest *without* any leading zeros\n"), stderr);
-        FPUTS(T("   --silent          Suppress error messages\n"), stderr);
-        FPUTS(T("   --ignore-errors   Ignore I/O errors and proceeed with the next file\n"), stderr);
-        FPUTS(T("   --no-flush        Do *not* flush the standard output stream after each file\n"), stderr);
-        FPUTS(T("   --init-with-zero  Initialize CRC with zero (default is 0xFFF...FFF)\n"), stderr);
-        FPUTS(T("   --negate-final    Negate the final CRC result\n"), stderr);
-        FPUTS(T("   --self-test       Run integreated self-test and exit program\n\n"), stderr);
-        return EXIT_SUCCESS;
-    }
-
     if (options & OPT_SLFTST)
     {
         FPUTS(T("Running CRC-64 self-test, please wait...\n"), stderr);
         fflush(stderr);
-        return self_test();
+        if (self_test() == EXIT_SUCCESS)
+        {
+            FPUTS(T("All tests completed successfully :-)\n"), stderr);
+            return EXIT_SUCCESS;
+        }
+        else
+        {
+            if (!(options & OPT_SILENT))
+            {
+                FPUTS(g_aborted ? T("Error: Test was interrupted!\n") : T("At least one test has failed :-(\n"), stderr);
+            }
+            return EXIT_FAILURE;
+        }
     }
 
 #ifdef _WIN32
@@ -523,9 +569,9 @@ int MAIN(int argc, CHAR *argv[])
 
     if (arg_off < argc)
     {
-        while ((arg_off < argc) && (!g_interrupted_flag))
+        while ((arg_off < argc) && (!g_aborted))
         {
-            if (process(argv[arg_off++], options) != EXIT_SUCCESS)
+            if (process_file(argv[arg_off++], options) != EXIT_SUCCESS)
             {
                 if (!(options & OPT_IGNERR))
                 {
@@ -537,7 +583,7 @@ int MAIN(int argc, CHAR *argv[])
     }
     else
     {
-        if (process(NULL, options) != EXIT_SUCCESS)
+        if (process_file(NULL, options) != EXIT_SUCCESS)
         {
             if (!(options & OPT_IGNERR))
             {
@@ -546,7 +592,7 @@ int MAIN(int argc, CHAR *argv[])
         }
     }
 
-    if (g_interrupted_flag && (!(options & OPT_IGNERR)))
+    if (g_aborted && (!(options & OPT_IGNERR)))
     {
         if (!(options & OPT_SILENT))
         {

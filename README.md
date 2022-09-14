@@ -10,17 +10,17 @@ Synopsis:
    crc64.exe [OPTIONS] [<file_1> [<file_2> ... <file_n>]]
 
 Options:
-   --help --version  Print help screen / show version information
-   --binary          Output the digest in binary format (default is hex-format)
-   --decimal         Output the digest in decimal string format
-   --upper-case      Print hex-string as upper-case (default is lower-case)
-   --no-padding      Print the digest *without* any leading zeros
-   --silent          Suppress error messages
-   --ignore-errors   Ignore I/O errors and proceeed with the next file
-   --no-flush        Do *not* flush the standard output stream after each file
-   --init-with-zero  Initialize CRC with zero (default is 0xFFF...FFF)
-   --negate-final    Negate the final CRC result
-   --self-test       Run integreated self-test and exit program
+   -h --help --version  Show help screen / show version information
+   -b --binary          Output digest in binary format (default is hex-string)
+   -d --decimal         Output digest in decimal string format
+   -u --upper-case      Print digest as upper-case (default is lower-case)
+   -p --no-padding      Print digest *without* any leading zeros
+   -s --silent          Suppress error messages
+   -e --ignore-errors   Ignore I/O errors and proceeed with the next file
+   -f --no-flush        Do *not* flush output stream after each file
+   -z --init-with-zero  Initialize CRC with 0x000..000 (default is 0xFFF..FFF)
+   -n --negate-final    Negate the final CRC result
+   -t --self-test       Run integrated self-test and exit program
 ```
 
 One output line is generated per input file:
