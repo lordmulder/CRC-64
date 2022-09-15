@@ -3,6 +3,14 @@
 /* This work has been released under the CC0 1.0 Universal license! */
 /********************************************************************/
 
+#ifndef _WIN32
+#define _FILE_OFFSET_BITS 64
+#endif
+
+#if defined(__MINGW32__) || defined(__MINGW64__)
+#define __USE_MINGW_ANSI_STDIO 0
+#endif
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -15,10 +23,8 @@
 #include <signal.h>
 
 #ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN 1
-#include <Windows.h>
-#include <io.h>
 #include <fcntl.h>
+#include <io.h>
 #endif
 
 static const int VERSION_MAJOR = 1;
@@ -49,6 +55,9 @@ static const int VERSION_PATCH = 2;
 #define FORCE_INLINE __attribute__((always_inline)) __inline__
 #define COUNTOF(X) (sizeof(X) / sizeof((X)[0]))
 #define ATOMIC_INC(X) __sync_add_and_fetch((X), 1L);
+#ifdef _WIN32
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 
 #elif defined(_MSC_VER)
 
@@ -57,6 +66,8 @@ static const int VERSION_PATCH = 2;
 #define FORCE_INLINE __forceinline
 #define COUNTOF(X) _countof(X)
 #define ATOMIC_INC(X) _InterlockedIncrement((X));
+#pragma warning(disable: 4996)
+
 #else
 
 #error Unsupported compiler, please fix !!!
@@ -79,6 +90,8 @@ static const int VERSION_PATCH = 2;
 #define FPUTS fputws
 #define FPRINTF fwprintf
 #define FOPEN _wfopen
+#define STAT_T struct _stati64
+#define FSTAT(X,Y) _fstati64(_fileno(X), (Y))
 #define __T(X) L##X
 #define T(X) __T(X)
 #ifndef S_IFMT
@@ -101,6 +114,8 @@ int _dowildcard = -1;
 #define FPUTS fputs
 #define FPRINTF fprintf
 #define FOPEN fopen
+#define STAT_T struct stat
+#define FSTAT(X,Y) fstat(fileno(X), (Y))
 #define __T(X) X
 #define T(X) __T(X)
 
@@ -110,7 +125,7 @@ int _dowildcard = -1;
 /* Signal handler                                                           */
 /* ======================================================================== */
 
-static long g_aborted = 0L;
+static volatile long g_aborted = 0L;
 
 static void sigint_handler(const int sig)
 {
@@ -208,22 +223,16 @@ static uint64_t PURE FORCE_INLINE crc64_update(uint64_t crc, const uint8_t *ptr,
 /* Detect directory                                                         */
 /* ======================================================================== */
 
-#ifdef _MSC_VER
-#pragma warning(disable: 4100)
-#endif
-
 static int is_directory(FILE *const file)
 {
-#ifndef _WIN32
-    struct stat statbuf;
-    if (!fstat(fileno(file), &statbuf))
+    STAT_T statbuf;
+    if (!FSTAT(file, &statbuf))
     {
         if ((statbuf.st_mode & S_IFMT) == S_IFDIR)
         {
             return 1;
         }
     }
-#endif
     return 0;
 }
 
@@ -231,7 +240,7 @@ static int is_directory(FILE *const file)
 /* Process File                                                             */
 /* ======================================================================== */
 
-#define BUFF_SIZE 4096U
+#define BUFF_SIZE (sizeof(uintptr_t) * sizeof(uintptr_t) * 256U)
 
 #ifdef _WIN32
 const wchar_t *const STR_STDIN = L"CONIN$";
@@ -417,7 +426,7 @@ static int self_test(void)
 /* Parse options                                                            */
 /* ======================================================================== */
 
-#define ISALNUM(X) (((X) != T('\0')) && ((((X) >= T('0')) && ((X) <= T('9'))) || (((X) >= T('a')) && ((X) <= T('z'))) || (((X) >= T('A')) && ((X) <= T('Z')))))
+#define ISALPHA(X) (((X) != T('\0')) && ((((X) >= T('a')) && ((X) <= T('z'))) || (((X) >= T('A')) && ((X) <= T('Z')))))
 
 static const struct
 {
@@ -459,12 +468,12 @@ static int parse_option(int *const options, const CHAR c, const CHAR *const name
 /* MAIN                                                                     */
 /* ======================================================================== */
 
-int MAIN(int argc, CHAR *argv[])
+int MAIN(int argc, CHAR* argv[])
 {
     int arg_off = 1, options = 0, exit_code = EXIT_SUCCESS;
 
 #ifdef _WIN32
-    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+    _seterrormode(3);
     _setmode(_fileno(stdin),  _O_BINARY);
     _setmode(_fileno(stderr), _O_U8TEXT);
     signal(SIGINT, sigint_handler);
@@ -482,7 +491,7 @@ int MAIN(int argc, CHAR *argv[])
         goto print_help;
     }
 
-    while ((arg_off < argc) && (argv[arg_off][0] == T('-')) && ((argv[arg_off][1] == T('-')) || ISALNUM(argv[arg_off][1])))
+    while ((arg_off < argc) && (argv[arg_off][0] == T('-')) && ((argv[arg_off][1] == T('-')) || ISALPHA(argv[arg_off][1])))
     {
         const CHAR *arg_ptr = argv[arg_off++] + 1U;
         if (*arg_ptr == T('-'))
@@ -502,7 +511,7 @@ int MAIN(int argc, CHAR *argv[])
         }
         else
         {
-            for(; ISALNUM(*arg_ptr); ++arg_ptr)
+            for(; ISALPHA(*arg_ptr); ++arg_ptr)
             {
                 if (parse_option(&options, TOLOWER(*arg_ptr), NULL) != EXIT_SUCCESS)
                 {

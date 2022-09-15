@@ -33,7 +33,7 @@ else
 endif
 
 ifneq (,$(firstword $(filter %-w64-mingw32 %w64-windows-gnu,$(MACHINE))))
-  CFLAGS += -D__USE_MINGW_ANSI_STDIO=0 -mconsole -municode
+  CFLAGS += -mconsole -municode
 endif
 
 ifeq ($(STATIC),1)
