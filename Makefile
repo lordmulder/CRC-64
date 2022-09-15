@@ -40,10 +40,11 @@ ifeq ($(STATIC),1)
   CFLAGS += -static
 endif
 
+ifeq ($(STRIP),1)
+  CFLAGS += -s
+endif
+
 .PHONY: all
 
 all:
 	$(CC) $(CFLAGS) -o $(OUTNAME) crc64.c
-ifeq ($(STRIP),1)
-	strip $(OUTNAME)
-endif
