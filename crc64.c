@@ -84,6 +84,7 @@ static const int VERSION_PATCH = 2;
 #define CHAR wchar_t
 #define MAIN wmain
 #define STRCASECMP _wcsicmp
+#define STRLEN wcslen
 #define ISSPACE iswspace
 #define TOLOWER towlower
 #define PRINTF wprintf
@@ -108,6 +109,7 @@ int _dowildcard = -1;
 #define CHAR char
 #define MAIN main
 #define STRCASECMP strcasecmp
+#define STRLEN strlen
 #define ISSPACE isspace
 #define TOLOWER tolower
 #define PRINTF printf
@@ -350,7 +352,10 @@ static int process_file(const CHAR *const file_name, const int options)
     }
     else
     {
+        const CHAR *const name_ptr = file_name ? file_name : STR_STDIN;
         fwrite(&crc, sizeof(uint64_t), 1U, stdout);
+        fwrite(&total_size, sizeof(uint64_t), 1U, stdout);
+        fwrite(name_ptr, sizeof(CHAR), STRLEN(name_ptr) + 1U, stdout);
     }
 
     if (!(options & OPT_NOFLSH))
