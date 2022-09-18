@@ -289,7 +289,7 @@ static int process_file(const CHAR *const file_name, const int options)
         {
             if (!(options & OPT_IGNERR))
             {
-                if (!(options & OPT_SILENT))
+                if (!((options & OPT_SILENT) || g_aborted))
                 {
                     FPUTS(T("I/O Error: Failed to read input data!\n"), stderr);
                 }
