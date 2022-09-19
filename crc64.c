@@ -28,21 +28,22 @@
 #endif
 
 static const int VERSION_MAJOR = 1;
-static const int VERSION_MINOR = 0;
-static const int VERSION_PATCH = 2;
+static const int VERSION_MINOR = 1;
+static const int VERSION_PATCH = 0;
 
-#define OPT_HELPSC 0x001
-#define OPT_VERSNO 0x002
-#define OPT_BINARY 0x004
-#define OPT_UPPERC 0x008
-#define OPT_DECIML 0x010
-#define OPT_NOPADD 0x020
-#define OPT_IGNERR 0x040
-#define OPT_SILENT 0x080
-#define OPT_NOFLSH 0x100
-#define OPT_ZEROIN 0x200
-#define OPT_NEGATE 0x400
-#define OPT_SLFTST 0x800
+#define OPT_HELPSC 0x0001
+#define OPT_VERSNO 0x0002
+#define OPT_BINARY 0x0004
+#define OPT_UPPERC 0x0008
+#define OPT_DECIML 0x0010
+#define OPT_NOPADD 0x0020
+#define OPT_IGNERR 0x0040
+#define OPT_SILENT 0x0080
+#define OPT_NOFLSH 0x0100
+#define OPT_ZEROIN 0x0200
+#define OPT_NEGATE 0x0400
+#define OPT_NOLGTH 0x0800
+#define OPT_SLFTST 0x1000
 
 /* ======================================================================== */
 /* Compiler                                                                 */
@@ -239,6 +240,20 @@ static int is_directory(FILE *const file)
 }
 
 /* ======================================================================== */
+/* Store 64-Bit value (LE)                                                  */
+/* ======================================================================== */
+
+static size_t store_uint64(uint64_t value, uint8_t *const buffer)
+{
+    size_t count = 0U;
+    for (; value; value >>= 8)
+    {
+        buffer[count++] = value & 0xFF;
+    }
+    return count;
+}
+
+/* ======================================================================== */
 /* Process File                                                             */
 /* ======================================================================== */
 
@@ -304,6 +319,12 @@ static int process_file(const CHAR *const file_name, const int options)
         {
             goto clean_up; /*process was interrupted*/
         }
+    }
+
+    if (!(options & OPT_NOLGTH))
+    {
+        const size_t count = store_uint64(total_size, buffer);
+        crc = crc64_update(crc, buffer, count);
     }
 
     if (options & OPT_NEGATE)
@@ -388,6 +409,7 @@ static const struct
 CRC64_TESTCASE[] =
 {
     { { 0xffffffffffffffffULL, 0x0000000000000000ULL }, 0x0000001, "" },
+    { { 0x9d13a61c0e5b0ff5ULL, 0x6c40df5f0b497347ULL }, 0x0000001, "123456789" },
     { { 0xfb747ec5060b68fdULL, 0x66501a349a0e0855ULL }, 0x0000001, "abc" },
     { { 0xe48092e3bf0112faULL, 0x29d18301fe33ca5dULL }, 0x0000001, "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq" },
     { { 0x763e5273763ec641ULL, 0x86751df1edd9a621ULL }, 0x0000001, "abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu" },
@@ -451,6 +473,7 @@ CLI_OPTION_NAMES[] =
     { T('s'), T("silent"),         OPT_SILENT },
     { T('f'), T("no-flush"),       OPT_NOFLSH },
     { T('z'), T("init-with-zero"), OPT_ZEROIN },
+    { T('l'), T("no-length"),      OPT_NOLGTH },
     { T('n'), T("negate-final"),   OPT_NEGATE },
     { T('t'), T("self-test"),      OPT_SLFTST }
 };
@@ -543,9 +566,10 @@ print_help:
             FPUTS(T("   -u --upper-case      Print digest as upper-case (default is lower-case)\n"), stderr);
             FPUTS(T("   -p --no-padding      Print digest *without* any leading zeros\n"), stderr);
             FPUTS(T("   -s --silent          Suppress error messages\n"), stderr);
-            FPUTS(T("   -e --ignore-errors   Ignore I/O errors and proceeed with the next file\n"), stderr);
+            FPUTS(T("   -e --ignore-errors   Ignore I/O errors and proceed with the next file\n"), stderr);
             FPUTS(T("   -f --no-flush        Do *not* flush output stream after each file\n"), stderr);
             FPUTS(T("   -z --init-with-zero  Initialize CRC with 0x000..000 (default is 0xFFF..FFF)\n"), stderr);
+            FPUTS(T("   -l --no-length       Do *not* append the input length to the message\n"), stderr);
             FPUTS(T("   -n --negate-final    Negate the final CRC result\n"), stderr);
             FPUTS(T("   -t --self-test       Run integrated self-test and exit program\n\n"), stderr);
         }
